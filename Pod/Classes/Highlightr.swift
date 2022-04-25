@@ -103,7 +103,41 @@ open class Highlightr
         
         return true
     }
-    
+
+    public struct HighlightAutoResult {
+        public let attributedString: NSAttributedString
+        public let language: String
+        public let relevance: Int
+    }
+
+    /**
+     Takes a String and returns a NSAttributedString with an auto-detected language restritected to a subset of languges highlighted.
+
+     - parameter code:           Code to highlight.
+     - parameter languageSubset: List of acceptable languages for auto-detection. Nil to allow all languages.
+     - parameter fastRender:     Defaults to true - When *true* will use the custom made html parser rather than Apple's solution.
+
+     - returns: NSAttributedString with the detected code highlighted.
+     */
+    open func highlightAuto(_ code: String, languageSubset: [String]?, fastRender: Bool = true) -> HighlightAutoResult?
+    {
+        let ret: JSValue
+        var args: [Any] = [code as Any]
+        if let languageSubset = languageSubset {
+            args.append(languageSubset)
+        }
+        ret = hljs.invokeMethod("highlightAuto", withArguments: args)
+        guard let html = ret.objectForKeyedSubscript("value")?.toString(),
+              let language = ret.objectForKeyedSubscript("language")?.toString(),
+              let relevance = ret.objectForKeyedSubscript("r")?.toInt32(),
+              let attributedString = finishHighlight(code, html: html, fastRender: fastRender) else {
+            return nil
+        }
+        return HighlightAutoResult(attributedString: attributedString,
+                                   language: language,
+                                   relevance: Int(relevance))
+    }
+
     /**
      Takes a String and returns a NSAttributedString with the given language highlighted.
      
@@ -125,12 +159,14 @@ open class Highlightr
             ret = hljs.invokeMethod("highlightAuto", withArguments: [code])
         }
 
-        let res = ret.objectForKeyedSubscript("value")
-        guard var string = res!.toString() else
-        {
+        guard let html = ret.objectForKeyedSubscript("value").toString() else {
             return nil
         }
-        
+        return finishHighlight(code, html: html, fastRender: fastRender)
+    }
+
+    private func finishHighlight(_ code: String, html: String, fastRender: Bool) -> NSAttributedString? {
+        var string = html
         var returnString : NSAttributedString?
         if(fastRender)
         {
@@ -152,7 +188,7 @@ open class Highlightr
         
         return returnString
     }
-    
+
     /**
      Returns a list of all the available themes.
      
